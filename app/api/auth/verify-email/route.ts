@@ -15,6 +15,10 @@ export async function POST(request: NextRequest) {
     }
 
     const isValidToken = verifyEmailToken(token)
+    console.log("Token received:", token);
+    console.log("JWT_SECRET length:", process.env.JWT_SECRET?.length);
+    console.log("isValidToken:", isValidToken);
+
     if (!isValidToken) {
       console.log("Invalid or expired token")
       return NextResponse.json({ error: "Invalid or expired verification token" }, { status: 400 })
