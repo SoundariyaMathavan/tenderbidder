@@ -10,8 +10,8 @@ export async function POST(request: NextRequest) {
     const { token } = body
 
     if (!token) {
-      console.log("No token provided")
-      return NextResponse.json({ error: "Verification token is required" }, { status: 400 })
+      console.log("No token provided");
+      return NextResponse.json({ error: "Verification failed. The link may be invalid or expired. Please try signing up again or request a new verification email." }, { status: 400 });
     }
 
     const isValidToken = verifyEmailToken(token)
@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
     console.log("isValidToken:", isValidToken);
 
     if (!isValidToken) {
-      console.log("Invalid or expired token")
-      return NextResponse.json({ error: "Invalid or expired verification token" }, { status: 400 })
+      console.log("Invalid or expired token");
+      return NextResponse.json({ error: "Verification failed. The link may be invalid or expired. Please try signing up again or request a new verification email." }, { status: 400 });
     }
 
     const db = await getDatabase()
@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user) {
-      console.log("User not found or token expired in DB")
-      return NextResponse.json({ error: "Invalid or expired verification token" }, { status: 400 })
+      console.log("User not found or token expired in DB");
+      return NextResponse.json({ error: "Verification failed. The link may be invalid or expired. Please try signing up again or request a new verification email." }, { status: 400 });
     }
 
     await usersCollection.updateOne(
@@ -51,12 +51,12 @@ export async function POST(request: NextRequest) {
       },
     )
 
-    console.log("User verified, sending confirmation email...")
-    await sendConfirmationEmail(user.email, user.companyName)
+    console.log("User verified, sending confirmation email...");
+    await sendConfirmationEmail(user.email, user.companyName);
 
     return NextResponse.json({
-      message: "Email verified successfully",
-    })
+      message: "Verification successful! You may now sign in."
+    });
   } catch (error) {
     console.error("Email verification error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

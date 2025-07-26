@@ -69,7 +69,10 @@ export default function VerifyEmailPage() {
           {verificationStatus === "error" && (
             <div className="text-center">
               <h3 className="text-lg font-semibold text-red-600 mb-2">Verification Failed</h3>
-              <p className="mb-4">There was an error verifying your email. The link may be invalid or expired.</p>
+              <p className="mb-4">
+                There was an error verifying your email. The link may be invalid or expired.<br />
+                If you did not receive the verification email, try signing up again with the same email address or request a new verification email from the sign in page.
+              </p>
               <Button onClick={() => router.push("/auth/signin")}>Back to Sign In</Button>
             </div>
           )}
