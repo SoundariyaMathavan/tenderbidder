@@ -59,9 +59,39 @@ async function verifyEmailWithToken(token: string) {
   
   if (!userWithToken) {
     console.log("❌ No user found with this verification token");
-    // Check if there are any unverified users at all
-    const unverifiedCount = await usersCollection.countDocuments({ isVerified: false });
-    console.log("📊 Total unverified users in DB:", unverifiedCount);
+    
+    // Enhanced debugging - let's see what tokens are actually in the database
+    const unverifiedUsers = await usersCollection.find(
+      { isVerified: false },
+      { 
+        projection: { 
+          email: 1, 
+          verificationToken: 1,
+          verificationExpires: 1,
+          createdAt: 1
+        } 
+      }
+    ).toArray();
+    
+    console.log("📊 Total unverified users in DB:", unverifiedUsers.length);
+    console.log("🔍 Unverified users and their tokens:");
+    
+    unverifiedUsers.forEach((user, index) => {
+      console.log(`  User ${index + 1}:`);
+      console.log(`    Email: ${user.email}`);
+      console.log(`    Token (first 20 chars): ${user.verificationToken?.substring(0, 20) || 'NO TOKEN'}...`);
+      console.log(`    Token (last 20 chars): ...${user.verificationToken?.substring(user.verificationToken.length - 20) || 'NO TOKEN'}`);
+      console.log(`    Token length: ${user.verificationToken?.length || 0}`);
+      console.log(`    Expires: ${user.verificationExpires}`);
+      console.log(`    Created: ${user.createdAt}`);
+      console.log(`    Token matches: ${user.verificationToken === token}`);
+    });
+    
+    console.log("🔍 Looking for token:");
+    console.log(`    Token (first 20 chars): ${token.substring(0, 20)}...`);
+    console.log(`    Token (last 20 chars): ...${token.substring(token.length - 20)}`);
+    console.log(`    Token length: ${token.length}`);
+    
     return { success: false, error: "User not found" };
   }
 

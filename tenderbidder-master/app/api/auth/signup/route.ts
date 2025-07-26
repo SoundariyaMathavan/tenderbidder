@@ -35,6 +35,11 @@ export async function POST(request: NextRequest) {
 
     // Generate verification token
     const verificationToken = generateVerificationToken()
+    
+    console.log("🎫 Generated verification token:");
+    console.log(`    Token (first 20 chars): ${verificationToken.substring(0, 20)}...`);
+    console.log(`    Token (last 20 chars): ...${verificationToken.substring(verificationToken.length - 20)}`);
+    console.log(`    Token length: ${verificationToken.length}`);
 
     // Create user
     const newUser = {
@@ -49,7 +54,12 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date(),
     }
 
-    await usersCollection.insertOne(newUser)
+    const insertResult = await usersCollection.insertOne(newUser)
+    console.log("📝 User inserted with ID:", insertResult.insertedId);
+    
+    // Verify the token was stored correctly
+    const storedUser = await usersCollection.findOne({ _id: insertResult.insertedId });
+    console.log("✅ Verification - stored token matches generated:", storedUser?.verificationToken === verificationToken);
 
     // Send verification email
     try {
