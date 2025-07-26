@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       specifications,
       requirements,
       documents,
+      hasFiles,
     } = body
 
     // Validate required fields
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
       specifications,
       requirements: requirements || [],
       documents: documents || [],
+      hasFiles: hasFiles || false,
       status: "open",
       bidCount: 0,
       progress: 0,

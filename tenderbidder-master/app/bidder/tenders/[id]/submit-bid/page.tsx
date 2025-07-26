@@ -126,7 +126,8 @@ export default function SubmitBidPage() {
         return
       }
 
-      const response = await fetch("/api/bids", {
+      // First, submit the bid
+      const bidResponse = await fetch("/api/bids", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -135,39 +136,77 @@ export default function SubmitBidPage() {
         body: JSON.stringify({
           projectId: params.id,
           ...formData,
-          documents: uploadedFiles.map(file => ({
-            name: file.name,
-            size: file.size,
-            type: file.type
-          }))
+          hasFiles: uploadedFiles.length > 0,
         }),
       })
 
-      const data = await response.json()
+      const bidData = await bidResponse.json()
 
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: `Bid submitted and analyzed! AI Score: ${data.aiScore}/100`,
-        })
-        
-        // Show analysis results in a more detailed toast
-        setTimeout(() => {
-          toast({
-            title: "AI Analysis Complete",
-            description: `Your bid received a score of ${data.aiScore}/100. Rating: ${data.review?.overall || 'Pending'}`,
-          })
-        }, 2000)
-        
-        // Redirect back to tender detail page to show "Submitted" status
-        router.push(`/bidder/tenders/${params.id}`)
-      } else {
+      if (!bidResponse.ok) {
         toast({
           title: "Error",
-          description: data.error || "Failed to submit bid. Please try again.",
+          description: bidData.error || "Failed to submit bid. Please try again.",
           variant: "destructive",
         })
+        return
       }
+
+      // If there are files, upload them
+      if (uploadedFiles.length > 0) {
+        const uploadFormData = new FormData()
+        uploadedFiles.forEach(file => {
+          uploadFormData.append("files", file)
+        })
+        uploadFormData.append("type", "proposal")
+        uploadFormData.append("entityId", bidData.bidId)
+
+        const uploadResponse = await fetch("/api/files/upload", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: uploadFormData,
+        })
+
+        if (!uploadResponse.ok) {
+          const uploadError = await uploadResponse.json()
+          toast({
+            title: "Warning",
+            description: `Bid submitted but file upload failed: ${uploadError.error}`,
+            variant: "destructive",
+          })
+        } else {
+          const uploadData = await uploadResponse.json()
+          
+          // Update bid with file information
+          await fetch(`/api/bids/${bidData.bidId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              documents: uploadData.files,
+            }),
+          })
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: `Bid submitted and analyzed! AI Score: ${bidData.aiScore}/100`,
+      })
+      
+      // Show analysis results in a more detailed toast
+      setTimeout(() => {
+        toast({
+          title: "AI Analysis Complete",
+          description: `Your bid received a score of ${bidData.aiScore}/100. Rating: ${bidData.review?.overall || 'Pending'}`,
+        })
+      }, 2000)
+      
+      // Redirect back to tender detail page to show "Submitted" status
+      router.push(`/bidder/tenders/${params.id}`)
     } catch (error) {
       toast({
         title: "Error",

@@ -19,7 +19,8 @@ import {
   DollarSign,
   TrendingUp,
   Settings,
-  User
+  User,
+  Download
 } from "lucide-react"
 import Link from "next/link"
 import { NotificationBell } from "@/components/notifications"
@@ -30,6 +31,7 @@ export default function TenderDashboard() {
   const [activeTab, setActiveTab] = useState("projects")
   const [projects, setProjects] = useState([])
   const [loadingProjects, setLoadingProjects] = useState(true)
+  const [downloadingProposals, setDownloadingProposals] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isLoading && (!user || user.userType !== "tender")) {
@@ -65,6 +67,39 @@ export default function TenderDashboard() {
 
     fetchProjects()
   }, [user])
+
+  const handleDownloadProposals = async (projectId: string, projectTitle: string) => {
+    setDownloadingProposals(projectId)
+    try {
+      const token = localStorage.getItem("auth_token")
+      if (!token) return
+
+      const response = await fetch(`/api/projects/${projectId}/download-proposals`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${projectTitle.replace(/[^a-zA-Z0-9]/g, '_')}_Proposals.zip`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        const errorData = await response.json()
+        console.error("Download failed:", errorData.error)
+      }
+    } catch (error) {
+      console.error("Error downloading proposals:", error)
+    } finally {
+      setDownloadingProposals(null)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -290,6 +325,17 @@ export default function TenderDashboard() {
                                   View Bids ({project.bidCount || 0})
                                 </Button>
                               </Link>
+                              {(project.bidCount || 0) > 0 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDownloadProposals(project._id, project.title)}
+                                  disabled={downloadingProposals === project._id}
+                                >
+                                  <Download className="h-4 w-4 mr-2" />
+                                  {downloadingProposals === project._id ? "Downloading..." : "Download All"}
+                                </Button>
+                              )}
                               <Link href={`/tender/projects/${project._id}/edit`}>
                                 <Button size="sm">
                                   <Edit className="h-4 w-4 mr-2" />

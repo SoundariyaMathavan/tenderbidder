@@ -8,29 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { Building2, ArrowLeft, Upload, Calendar, MapPin, DollarSign, Clock, FileText, Star } from "lucide-react"
+import { Building2, ArrowLeft, Upload, Calendar, MapPin, DollarSign, Clock, FileText, Star, Download } from "lucide-react"
 import Link from "next/link"
-
-// Mock tender data
-const mockTender = {
-  id: "1",
-  title: "Office Complex Construction",
-  company: "BuildCorp Ltd",
-  description:
-    "Modern 10-story office building with parking facility. This project involves the construction of a state-of-the-art commercial complex featuring sustainable design elements, advanced HVAC systems, and modern amenities.",
-  budget: "$2,500,000",
-  location: "Downtown District",
-  deadline: "2024-02-15",
-  category: "Commercial Construction",
-  duration: "18 months",
-  status: "open",
-  postedDate: "2024-01-10",
-  specifications:
-    "The building will feature reinforced concrete structure, glass facade, energy-efficient systems, underground parking for 200 vehicles, and LEED Gold certification requirements.",
-  requirements: ["Construction License", "Insurance Certificate", "Previous Experience", "Safety Certification"],
-  companyRating: 4.6,
-  companyProjects: 15,
-}
 
 export default function TenderDetailsPage() {
   const { user } = useAuth()
@@ -40,9 +19,10 @@ export default function TenderDetailsPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [bidStatus, setBidStatus] = useState(null) // null, 'submitted', 'shortlisted', 'awarded', 'rejected'
   const [loading, setLoading] = useState(true)
+  const [project, setProject] = useState(null)
 
   useEffect(() => {
-    const checkBidStatus = async () => {
+    const fetchProjectAndBidStatus = async () => {
       if (!user || !params.id) return
       
       setLoading(true)
@@ -53,30 +33,83 @@ export default function TenderDetailsPage() {
           return
         }
 
-        const response = await fetch(`/api/bids?projectId=${params.id}&bidderId=${user.id}`, {
+        // Fetch project details
+        const projectResponse = await fetch(`/api/projects/${params.id}`)
+        if (projectResponse.ok) {
+          const projectData = await projectResponse.json()
+          setProject(projectData.project)
+        }
+
+        // Check bid status
+        const bidResponse = await fetch(`/api/bids?projectId=${params.id}&bidderId=${user.id}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         })
 
-        if (response.ok) {
-          const data = await response.json()
-          if (data.bids && data.bids.length > 0) {
-            setBidStatus(data.bids[0].status)
+        if (bidResponse.ok) {
+          const bidData = await bidResponse.json()
+          if (bidData.bids && bidData.bids.length > 0) {
+            setBidStatus(bidData.bids[0].status)
           }
         }
       } catch (error) {
-        console.error("Error checking bid status:", error)
+        console.error("Error fetching project data:", error)
       } finally {
         setLoading(false)
       }
     }
 
-    checkBidStatus()
+    fetchProjectAndBidStatus()
   }, [user, params.id])
 
   const handleSubmitBid = () => {
     router.push(`/bidder/tenders/${params.id}/submit-bid`)
+  }
+
+  const handleDownloadFile = async (filename: string) => {
+    try {
+      const token = localStorage.getItem("auth_token")
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Please sign in to download files.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const response = await fetch(`/api/files/download/project/${params.id}/${filename}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.error || "Failed to download file.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to download file.",
+        variant: "destructive",
+      })
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -135,6 +168,25 @@ export default function TenderDetailsPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-2">Project Not Found</h2>
+          <p className="text-muted-foreground">The requested project could not be found.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -144,20 +196,15 @@ export default function TenderDetailsPage() {
             <Building2 className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-2xl font-bold">Tender Details</h1>
-              <p className="text-sm text-muted-foreground">{mockTender.title}</p>
+              <p className="text-sm text-muted-foreground">{project.title}</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            {loading ? (
-              <Button disabled>
-                <Clock className="h-4 w-4 mr-2" />
-                Loading...
-              </Button>
-            ) : bidStatus ? (
+            {bidStatus ? (
               <Badge className={`${getBidStatusColor(bidStatus)} text-white px-4 py-2 text-sm`}>
                 {getBidStatusText(bidStatus)}
               </Badge>
-            ) : mockTender.status === "open" ? (
+            ) : project.status === "open" ? (
               <Button onClick={handleSubmitBid}>
                 <Upload className="h-4 w-4 mr-2" />
                 Submit Bid
@@ -181,19 +228,12 @@ export default function TenderDetailsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center space-x-2">
-                    <span>{mockTender.title}</span>
-                    <Badge className={getStatusColor(mockTender.status)}>{getStatusText(mockTender.status)}</Badge>
+                    <span>{project.title}</span>
+                    <Badge className={getStatusColor(project.status)}>{getStatusText(project.status)}</Badge>
                   </CardTitle>
                   <CardDescription>
-                    Posted by {mockTender.company} on {mockTender.postedDate}
+                    Posted by {project.tenderCompany} on {new Date(project.createdAt).toLocaleDateString()}
                   </CardDescription>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-center space-x-1 mb-1">
-                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                    <span className="font-medium">{mockTender.companyRating}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{mockTender.companyProjects} projects completed</p>
                 </div>
               </div>
             </CardHeader>
@@ -203,28 +243,28 @@ export default function TenderDetailsPage() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Budget</p>
-                    <p className="text-sm text-muted-foreground">{mockTender.budget}</p>
+                    <p className="text-sm text-muted-foreground">${project.budget?.toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Location</p>
-                    <p className="text-sm text-muted-foreground">{mockTender.location}</p>
+                    <p className="text-sm text-muted-foreground">{project.location}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Deadline</p>
-                    <p className="text-sm text-muted-foreground">{mockTender.deadline}</p>
+                    <p className="text-sm text-muted-foreground">{new Date(project.deadline).toLocaleDateString()}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Duration</p>
-                    <p className="text-sm text-muted-foreground">{mockTender.duration}</p>
+                    <p className="text-sm text-muted-foreground">{project.duration || 'Not specified'}</p>
                   </div>
                 </div>
               </div>
@@ -237,6 +277,7 @@ export default function TenderDetailsPage() {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="specifications">Specifications</TabsTrigger>
               <TabsTrigger value="requirements">Requirements</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="company">Company Info</TabsTrigger>
             </TabsList>
 
@@ -246,7 +287,7 @@ export default function TenderDetailsPage() {
                   <CardTitle>Project Description</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground leading-relaxed">{mockTender.description}</p>
+                  <p className="text-muted-foreground leading-relaxed">{project.description}</p>
                 </CardContent>
               </Card>
 
@@ -258,19 +299,19 @@ export default function TenderDetailsPage() {
                   <CardContent className="space-y-3">
                     <div className="flex justify-between">
                       <span>Category</span>
-                      <span className="font-medium">{mockTender.category}</span>
+                      <span className="font-medium">{project.category}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Posted Date</span>
-                      <span className="font-medium">{mockTender.postedDate}</span>
+                      <span className="font-medium">{new Date(project.createdAt).toLocaleDateString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Bid Deadline</span>
-                      <span className="font-medium">{mockTender.deadline}</span>
+                      <span className="font-medium">{new Date(project.deadline).toLocaleDateString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Project Duration</span>
-                      <span className="font-medium">{mockTender.duration}</span>
+                      <span className="font-medium">{project.duration || 'Not specified'}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -282,19 +323,23 @@ export default function TenderDetailsPage() {
                   <CardContent className="space-y-3">
                     <div className="flex justify-between">
                       <span>Status</span>
-                      <Badge className={getStatusColor(mockTender.status)}>{getStatusText(mockTender.status)}</Badge>
+                      <Badge className={getStatusColor(project.status)}>{getStatusText(project.status)}</Badge>
                     </div>
                     <div className="flex justify-between">
                       <span>Days Remaining</span>
-                      <span className="font-medium">15 days</span>
+                      <span className="font-medium">
+                        {Math.max(0, Math.ceil((new Date(project.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} days
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Current Bids</span>
-                      <span className="font-medium">12 submitted</span>
+                      <span className="font-medium">{project.bidCount || 0} submitted</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Your Status</span>
-                      <span className="font-medium text-muted-foreground">Not submitted</span>
+                      <span className="font-medium text-muted-foreground">
+                        {bidStatus ? getBidStatusText(bidStatus) : 'Not submitted'}
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
@@ -307,7 +352,9 @@ export default function TenderDetailsPage() {
                   <CardTitle>Technical Specifications</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground leading-relaxed">{mockTender.specifications}</p>
+                  <p className="text-muted-foreground leading-relaxed">
+                    {project.specifications || 'No technical specifications provided.'}
+                  </p>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -319,14 +366,59 @@ export default function TenderDetailsPage() {
                   <CardDescription>Mandatory qualifications and documents needed</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {mockTender.requirements.map((req, index) => (
-                      <div key={index} className="flex items-center space-x-2 p-3 border rounded-lg">
-                        <FileText className="h-4 w-4 text-primary" />
-                        <span>{req}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {project.requirements && project.requirements.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {project.requirements.map((req, index) => (
+                        <div key={index} className="flex items-center space-x-2 p-3 border rounded-lg">
+                          <FileText className="h-4 w-4 text-primary" />
+                          <span>{req}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No specific requirements listed.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="documents" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Project Documents</CardTitle>
+                  <CardDescription>Download project-related documents and specifications</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {project.documents && project.documents.length > 0 ? (
+                    <div className="space-y-3">
+                      {project.documents.map((doc, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <FileText className="h-5 w-5 text-primary" />
+                            <div>
+                              <p className="font-medium">{doc.originalName}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {(doc.size / 1024 / 1024).toFixed(2)} MB • {doc.type}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadFile(doc.filename)}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No documents available for this project.</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -338,52 +430,28 @@ export default function TenderDetailsPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <h3 className="font-semibold text-lg">{mockTender.company}</h3>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <div className="flex">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`h-4 w-4 ${
-                              i < Math.floor(mockTender.companyRating)
-                                ? "text-yellow-400 fill-current"
-                                : "text-gray-300"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <span className="font-medium">{mockTender.companyRating}</span>
-                      <span className="text-muted-foreground">({mockTender.companyProjects} projects)</span>
-                    </div>
+                    <h3 className="font-semibold text-lg">{project.tenderCompany}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Posted on {new Date(project.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm font-medium">Industry Experience</p>
-                      <p className="text-sm text-muted-foreground">15+ years in construction</p>
+                      <p className="text-sm font-medium">Project Category</p>
+                      <p className="text-sm text-muted-foreground">{project.category}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Specialization</p>
-                      <p className="text-sm text-muted-foreground">Commercial & Residential</p>
+                      <p className="text-sm font-medium">Budget Range</p>
+                      <p className="text-sm text-muted-foreground">${project.budget?.toLocaleString()}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium">Location</p>
-                      <p className="text-sm text-muted-foreground">Downtown District</p>
+                      <p className="text-sm text-muted-foreground">{project.location}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Contact</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          window.open(
-                            `mailto:contact@buildcorp.com?subject=Inquiry about ${mockTender.title}&body=Dear BuildCorp team,\n\nI am interested in learning more about the ${mockTender.title} project.\n\nBest regards,\n${user?.companyName}`,
-                            "_blank",
-                          )
-                        }
-                      >
-                        Send Email
-                      </Button>
+                      <p className="text-sm font-medium">Status</p>
+                      <Badge className={getStatusColor(project.status)}>{getStatusText(project.status)}</Badge>
                     </div>
                   </div>
                 </CardContent>

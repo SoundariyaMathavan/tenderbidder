@@ -70,7 +70,8 @@ export default function NewProjectPage() {
         return
       }
 
-      const response = await fetch("/api/projects", {
+      // First, create the project
+      const projectResponse = await fetch("/api/projects", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -79,29 +80,67 @@ export default function NewProjectPage() {
         body: JSON.stringify({
           ...formData,
           requirements,
-          documents: documents.map(file => ({
-            name: file.name,
-            size: file.size,
-            type: file.type
-          }))
+          hasFiles: documents.length > 0,
         }),
       })
 
-      const data = await response.json()
+      const projectData = await projectResponse.json()
 
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Project created successfully!",
-        })
-        router.push("/tender/dashboard")
-      } else {
+      if (!projectResponse.ok) {
         toast({
           title: "Error",
-          description: data.error || "Failed to create project. Please try again.",
+          description: projectData.error || "Failed to create project. Please try again.",
           variant: "destructive",
         })
+        return
       }
+
+      // If there are files, upload them
+      if (documents.length > 0) {
+        const uploadFormData = new FormData()
+        documents.forEach(file => {
+          uploadFormData.append("files", file)
+        })
+        uploadFormData.append("type", "project")
+        uploadFormData.append("entityId", projectData.projectId)
+
+        const uploadResponse = await fetch("/api/files/upload", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: uploadFormData,
+        })
+
+        if (!uploadResponse.ok) {
+          const uploadError = await uploadResponse.json()
+          toast({
+            title: "Warning",
+            description: `Project created but file upload failed: ${uploadError.error}`,
+            variant: "destructive",
+          })
+        } else {
+          const uploadData = await uploadResponse.json()
+          
+          // Update project with file information
+          await fetch(`/api/projects/${projectData.projectId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              documents: uploadData.files,
+            }),
+          })
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: "Project created successfully!",
+      })
+      router.push("/tender/dashboard")
     } catch (error) {
       toast({
         title: "Error",
