@@ -81,7 +81,7 @@ export default function SignUpPage() {
           title: "Success",
           description: "Account created successfully! Please check your email for verification.",
         })
-        router.push("/auth/verify-email")
+        router.push(`/auth/check-email?email=${encodeURIComponent(formData.email)}`)
       } else {
         toast({
           title: "Error",
